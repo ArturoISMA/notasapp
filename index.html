@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NotasApp</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f4f5f8;
+        --surface: #ffffff;
+        --surface-strong: #edf0f8;
+        --text: #1f2937;
+        --muted: #6b7280;
+        --brand: #4f46e5;
+        --brand-soft: #eef2ff;
+        --border: rgba(15, 23, 42, 0.08);
+        --radius: 24px;
+        --shadow: 0 25px 60px rgba(15, 23, 42, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        min-height: 100%;
+      }
+
+      body {
+        margin: 0;
+        font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background-color: var(--bg);
+        color: var(--text);
+        line-height: 1.5;
+      }
+
+      button,
+      input,
+      textarea,
+      select {
+        font: inherit;
+      }
+
+      a {
+        color: inherit;
+      }
+
+      body > header,
+      body > main,
+      body > footer {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 24px 24px 0;
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+      }
+
+      .brand {
+        font-size: 1.35rem;
+        font-weight: 700;
+      }
+
+      .brand span {
+        color: var(--brand);
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        border: 0;
+        border-radius: 999px;
+        padding: 0.95rem 1.3rem;
+        background: var(--brand);
+        color: #fff;
+        cursor: pointer;
+        text-decoration: none;
+      }
+
+      .button.secondary {
+        background: #f9fafb;
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+
+      main {
+        padding-top: 36px;
+      }
+
+      .hero {
+        display: grid;
+        gap: 1.5rem;
+      }
+
+      .hero h1 {
+        font-size: clamp(2rem, 3vw, 3rem);
+        margin: 0;
+      }
+
+      .hero p {
+        margin: 0;
+        max-width: 40rem;
+        color: var(--muted);
+      }
+
+      .cards {
+        display: grid;
+        gap: 1.25rem;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        margin-top: 2rem;
+      }
+
+      article.note-card {
+        background: var(--surface);
+        border-radius: var(--radius);
+        padding: 1.5rem;
+        box-shadow: var(--shadow);
+        border: 1px solid transparent;
+      }
+
+      article.note-card:hover {
+        border-color: rgba(79, 70, 229, 0.12);
+      }
+
+      article.note-card h2 {
+        margin: 0 0 0.75rem;
+        font-size: 1.05rem;
+      }
+
+      article.note-card p {
+        margin: 0 0 1.25rem;
+        color: var(--muted);
+      }
+
+      .note-meta {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.55rem 0.85rem;
+        border-radius: 999px;
+        background: var(--brand-soft);
+        color: var(--brand);
+        font-size: 0.9rem;
+      }
+
+      .note-actions {
+        margin-top: 1rem;
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+      }
+
+      .note-actions label {
+        cursor: pointer;
+      }
+
+      footer {
+        padding: 32px 24px 40px;
+        text-align: center;
+        color: var(--muted);
+      }
+
+      input[type='checkbox'] {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+        background: rgba(15, 23, 42, 0.45);
+        z-index: 10;
+      }
+
+      .modal {
+        width: min(640px, 100%);
+        background: var(--surface);
+        border-radius: var(--radius);
+        padding: 2rem;
+        box-shadow: var(--shadow);
+        border: 1px solid rgba(15, 23, 42, 0.08);
+      }
+
+      .modal header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+      }
+
+      .modal header h2 {
+        margin: 0;
+        font-size: 1.5rem;
+      }
+
+      .modal header p {
+        margin: 0.5rem 0 0;
+        color: var(--muted);
+      }
+
+      .field {
+        margin-top: 1.5rem;
+      }
+
+      .field label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 0.6rem;
+      }
+
+      .field input,
+      .field textarea,
+      .field select {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: #f9fafb;
+        color: var(--text);
+        padding: 1rem 1rem;
+      }
+
+      .field textarea {
+        min-height: 160px;
+        resize: vertical;
+      }
+
+      .modal-footer {
+        margin-top: 1.75rem;
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.85rem;
+        flex-wrap: wrap;
+      }
+
+      .modal-footer .button {
+        padding: 0.95rem 1.25rem;
+      }
+
+      #edit-modal:checked ~ .modal-overlay {
+        display: flex;
+      }
+
+      @media (max-width: 640px) {
+        body > header,
+        body > main,
+        body > footer {
+          padding-left: 16px;
+          padding-right: 16px;
+        }
+
+        .hero {
+          text-align: center;
+        }
+
+        .hero p {
+          margin-left: auto;
+          margin-right: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <input type="checkbox" id="edit-modal" />
+
+    <header>
+      <div class="brand">Notas<span>App</span></div>
+      <button id="open-note" type="button" class="button" aria-haspopup="dialog">+ Nueva nota</button>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="hero-title">
+        <div>
+          <h1 id="hero-title">Mis notas</h1>
+          <p>Todo lo que no quiero olvidar, en un solo lugar.</p>
+        </div>
+      </section>
+
+      <section>
+        <div class="cards" id="note-list" aria-label="Lista de notas"></div>
+      </section>
+    </main>
+
+    <footer>
+      <p>Hecho con HTML y CSS nativo, sin frameworks.</p>
+    </footer>
+
+    <div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div class="modal">
+        <header>
+          <div>
+            <h2 id="modal-title">Nueva nota</h2>
+            <p>Apunta esa idea antes de que se te escape.</p>
+          </div>
+          <button type="button" id="close-note" class="button secondary">Cerrar</button>
+        </header>
+
+        <form id="note-form">
+          <div class="field">
+            <label for="note-title">Título</label>
+            <input id="note-title" type="text" placeholder="Ej. Comprar cascos talla M" />
+          </div>
+
+          <div class="field">
+            <label for="note-category">Categoría</label>
+            <select id="note-category">
+              <option>Trabajo</option>
+              <option>Ideas</option>
+              <option>Personal</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="note-content">Contenido</label>
+            <textarea id="note-content" placeholder="Escribe aquí tu nota..."></textarea>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" id="cancel-note" class="button secondary">Cancelar</button>
+            <button type="submit" id="save-note" class="button">Guardar nota</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      // Datos iniciales de las notas.
+      const notes = [
+        {
+          id: 1,
+          title: 'Comprar cascos talla M',
+          category: 'Trabajo',
+          content: 'Son los que más se venden. Pedir reposición al proveedor.',
+          date: 'Hoy'
+        },
+        {
+          id: 2,
+          title: 'Grabar episodio del podcast',
+          category: 'Ideas',
+          content: 'Tema: cómo elegir tu primer casco sin morir en el intento.',
+          date: 'Ayer'
+        },
+        {
+          id: 3,
+          title: 'Idea para la clase',
+          category: 'Personal',
+          content: 'Apagar el CSS en vivo y que vean los huesos del HTML.',
+          date: 'Lunes'
+        }
+      ];
+
+      let currentNoteId = null;
+
+      const noteList = document.getElementById('note-list');
+      const noteForm = document.getElementById('note-form');
+      const modalTitle = document.getElementById('modal-title');
+      const editModal = document.getElementById('edit-modal');
+      const titleInput = document.getElementById('note-title');
+      const categoryInput = document.getElementById('note-category');
+      const contentInput = document.getElementById('note-content');
+      const openNoteButton = document.getElementById('open-note');
+      const closeNoteButton = document.getElementById('close-note');
+      const cancelNoteButton = document.getElementById('cancel-note');
+
+      // Renderiza las notas en el DOM.
+      function renderNotes() {
+        noteList.innerHTML = '';
+
+        if (notes.length === 0) {
+          noteList.innerHTML = '<p>No hay notas aún. Crea una nueva nota para comenzar.</p>';
+          return;
+        }
+
+        notes.forEach((note) => {
+          const article = document.createElement('article');
+          article.className = 'note-card';
+          article.innerHTML = `
+            <h2>${note.title}</h2>
+            <p>${note.content}</p>
+            <div class="note-actions">
+              <button type="button" class="button secondary" data-action="edit" data-id="${note.id}">Editar</button>
+              <button type="button" class="button secondary" data-action="delete" data-id="${note.id}">Borrar</button>
+              <span class="note-meta">${note.date}</span>
+            </div>
+          `;
+
+          noteList.appendChild(article);
+        });
+      }
+
+      // Abre el modal para crear o editar una nota.
+      function openModal(noteId = null) {
+        currentNoteId = noteId;
+        if (noteId !== null) {
+          const note = notes.find((item) => item.id === noteId);
+          modalTitle.textContent = 'Editar nota';
+          titleInput.value = note.title;
+          categoryInput.value = note.category;
+          contentInput.value = note.content;
+        } else {
+          modalTitle.textContent = 'Nueva nota';
+          noteForm.reset();
+        }
+
+        editModal.checked = true;
+      }
+
+      // Cierra el modal y limpia el formulario.
+      function closeModal() {
+        currentNoteId = null;
+        editModal.checked = false;
+        noteForm.reset();
+      }
+
+      // Guarda una nota nueva o actualiza una existente.
+      function saveNote(event) {
+        event.preventDefault();
+
+        const title = titleInput.value.trim();
+        const category = categoryInput.value;
+        const content = contentInput.value.trim();
+
+        if (!title || !content) {
+          return;
+        }
+
+        if (currentNoteId !== null) {
+          const note = notes.find((item) => item.id === currentNoteId);
+          note.title = title;
+          note.category = category;
+          note.content = content;
+        } else {
+          const newNote = {
+            id: Date.now(),
+            title,
+            category,
+            content,
+            date: 'Hoy'
+          };
+          notes.unshift(newNote);
+        }
+
+        renderNotes();
+        closeModal();
+      }
+
+      // Borra una nota por su id.
+      function deleteNote(noteId) {
+        const index = notes.findIndex((item) => item.id === noteId);
+        if (index !== -1) {
+          notes.splice(index, 1);
+          renderNotes();
+        }
+      }
+
+      // Maneja los clics dentro de la lista de notas.
+      function handleNoteClick(event) {
+        const button = event.target.closest('button');
+        if (!button) return;
+
+        const action = button.dataset.action;
+        const id = Number(button.dataset.id);
+
+        if (action === 'edit') {
+          openModal(id);
+        }
+
+        if (action === 'delete') {
+          deleteNote(id);
+        }
+      }
+
+      // Eventos principales.
+      openNoteButton.addEventListener('click', () => openModal());
+      closeNoteButton.addEventListener('click', closeModal);
+      cancelNoteButton.addEventListener('click', closeModal);
+      noteForm.addEventListener('submit', saveNote);
+      noteList.addEventListener('click', handleNoteClick);
+
+      renderNotes();
+    </script>
+  </body>
+</html>
