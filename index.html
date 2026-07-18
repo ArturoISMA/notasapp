@@ -491,6 +491,7 @@
           } else {
             const { error } = await supabaseClient.from('notas').insert([
               {
+                id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}`,
                 titulo: title,
                 categoria: category,
                 contenido: content,
