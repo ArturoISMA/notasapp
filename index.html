@@ -295,6 +295,7 @@
 
     <footer>
       <p>Hecho con HTML y CSS nativo, sin frameworks.</p>
+      <p id="status-message" style="margin-top: 0.75rem; color: var(--brand);"></p>
     </footer>
 
     <div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
@@ -335,33 +336,15 @@
       </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
-      // Datos iniciales de las notas.
-      const notes = [
-        {
-          id: 1,
-          title: 'Comprar cascos talla M',
-          category: 'Trabajo',
-          content: 'Son los que más se venden. Pedir reposición al proveedor.',
-          date: 'Hoy'
-        },
-        {
-          id: 2,
-          title: 'Grabar episodio del podcast',
-          category: 'Ideas',
-          content: 'Tema: cómo elegir tu primer casco sin morir en el intento.',
-          date: 'Ayer'
-        },
-        {
-          id: 3,
-          title: 'Idea para la clase',
-          category: 'Personal',
-          content: 'Apagar el CSS en vivo y que vean los huesos del HTML.',
-          date: 'Lunes'
-        }
-      ];
+      const SUPABASE_URL = 'https://nkaxcmlpubwzjwrsiimg.supabase.co';
+      const SUPABASE_ANON_KEY = 'sb_publishable_7K9aoR7PIu2RVgOweBqmKg_bJstkp6V';
+      const supabaseClient = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
+      let notes = [];
       let currentNoteId = null;
+      let isSaving = false;
 
       const noteList = document.getElementById('note-list');
       const noteForm = document.getElementById('note-form');
@@ -373,8 +356,23 @@
       const openNoteButton = document.getElementById('open-note');
       const closeNoteButton = document.getElementById('close-note');
       const cancelNoteButton = document.getElementById('cancel-note');
+      const saveButton = document.getElementById('save-note');
+      const statusMessage = document.getElementById('status-message');
 
-      // Renderiza las notas en el DOM.
+      function setStatus(message) {
+        if (statusMessage) {
+          statusMessage.textContent = message;
+        }
+      }
+
+      function setSaving(value) {
+        isSaving = value;
+        if (saveButton) {
+          saveButton.disabled = value;
+          saveButton.textContent = value ? 'Guardando...' : 'Guardar nota';
+        }
+      }
+
       function renderNotes() {
         noteList.innerHTML = '';
 
@@ -387,12 +385,12 @@
           const article = document.createElement('article');
           article.className = 'note-card';
           article.innerHTML = `
-            <h2>${note.title}</h2>
-            <p>${note.content}</p>
+            <h2>${note.titulo}</h2>
+            <p>${note.contenido}</p>
             <div class="note-actions">
               <button type="button" class="button secondary" data-action="edit" data-id="${note.id}">Editar</button>
               <button type="button" class="button secondary" data-action="delete" data-id="${note.id}">Borrar</button>
-              <span class="note-meta">${note.date}</span>
+              <span class="note-meta">${note.creada_en ? new Date(note.creada_en).toLocaleDateString('es-ES') : 'Reciente'}</span>
             </div>
           `;
 
@@ -400,15 +398,46 @@
         });
       }
 
-      // Abre el modal para crear o editar una nota.
+      async function initSupabase() {
+        if (!window.supabase || !supabaseClient) {
+          setStatus('No se pudo cargar Supabase desde el navegador.');
+          return false;
+        }
+
+        return true;
+      }
+
+      async function loadNotes() {
+        const ok = await initSupabase();
+        if (!ok) {
+          return;
+        }
+        const { data, error } = await supabaseClient
+          .from('notas')
+          .select('id, titulo, categoria, contenido, creada_en, modificado_en')
+          .order('creada_en', { ascending: false });
+
+        if (error) {
+          console.error(error);
+          noteList.innerHTML = '<p>No se pudieron cargar las notas desde Supabase. Revisa la tabla "notas" y sus políticas de seguridad.</p>';
+          setStatus('No se pudieron cargar las notas. Revisa las políticas de RLS en Supabase.');
+          return;
+        }
+
+        notes = data || [];
+        renderNotes();
+        setStatus('');
+      }
+
       function openModal(noteId = null) {
         currentNoteId = noteId;
         if (noteId !== null) {
           const note = notes.find((item) => item.id === noteId);
+          if (!note) return;
           modalTitle.textContent = 'Editar nota';
-          titleInput.value = note.title;
-          categoryInput.value = note.category;
-          contentInput.value = note.content;
+          titleInput.value = note.titulo;
+          categoryInput.value = note.categoria || 'Trabajo';
+          contentInput.value = note.contenido;
         } else {
           modalTitle.textContent = 'Nueva nota';
           noteForm.reset();
@@ -417,61 +446,99 @@
         editModal.checked = true;
       }
 
-      // Cierra el modal y limpia el formulario.
       function closeModal() {
         currentNoteId = null;
         editModal.checked = false;
         noteForm.reset();
       }
 
-      // Guarda una nota nueva o actualiza una existente.
-      function saveNote(event) {
+      async function saveNote(event) {
         event.preventDefault();
 
-        const title = titleInput.value.trim();
-        const category = categoryInput.value;
-        const content = contentInput.value.trim();
-
-        if (!title || !content) {
+        if (isSaving) {
           return;
         }
 
-        if (currentNoteId !== null) {
-          const note = notes.find((item) => item.id === currentNoteId);
-          note.title = title;
-          note.category = category;
-          note.content = content;
-        } else {
-          const newNote = {
-            id: Date.now(),
-            title,
-            category,
-            content,
-            date: 'Hoy'
-          };
-          notes.unshift(newNote);
+        const title = titleInput.value.trim();
+        const category = categoryInput.value.trim();
+        const content = contentInput.value.trim();
+
+        if (!title || !category || !content) {
+          setStatus('Completa todos los campos antes de guardar.');
+          return;
         }
 
-        renderNotes();
-        closeModal();
-      }
+        setSaving(true);
 
-      // Borra una nota por su id.
-      function deleteNote(noteId) {
-        const index = notes.findIndex((item) => item.id === noteId);
-        if (index !== -1) {
-          notes.splice(index, 1);
-          renderNotes();
+        try {
+          const ok = await initSupabase();
+          if (!ok) {
+            return;
+          }
+
+          if (currentNoteId !== null) {
+            const { error } = await supabaseClient
+              .from('notas')
+              .update({
+                titulo: title,
+                categoria: category,
+                contenido: content,
+                modificado_en: new Date().toISOString()
+              })
+              .eq('id', currentNoteId);
+
+            if (error) throw error;
+          } else {
+            const { error } = await supabaseClient.from('notas').insert([
+              {
+                titulo: title,
+                categoria: category,
+                contenido: content,
+                creada_en: new Date().toISOString(),
+                modificado_en: new Date().toISOString()
+              }
+            ]);
+
+            if (error) throw error;
+          }
+
+          await loadNotes();
+          closeModal();
+          setStatus('Nota guardada correctamente.');
+        } catch (error) {
+          console.error(error);
+          noteList.innerHTML = '<p>No se pudo guardar la nota. Revisa las políticas de acceso de Supabase para la tabla "notas".</p>';
+          setStatus('No se pudo guardar la nota. Revisa la tabla y las políticas de RLS.');
+        } finally {
+          setSaving(false);
         }
       }
 
-      // Maneja los clics dentro de la lista de notas.
+      async function deleteNote(noteId) {
+        if (!noteId) {
+          return;
+        }
+
+        const ok = await initSupabase();
+        if (!ok) {
+          return;
+        }
+        const { error } = await supabaseClient.from('notas').delete().eq('id', noteId);
+
+        if (error) {
+          console.error(error);
+          return;
+        }
+
+        await loadNotes();
+      }
+
       function handleNoteClick(event) {
         const button = event.target.closest('button');
         if (!button) return;
 
         const action = button.dataset.action;
-        const id = Number(button.dataset.id);
+        const id = button.dataset.id;
 
         if (action === 'edit') {
           openModal(id);
@@ -482,7 +549,6 @@
         }
       }
 
-      // Eventos principales.
       openNoteButton.addEventListener('click', () => openModal());
       closeNoteButton.addEventListener('click', closeModal);
       cancelNoteButton.addEventListener('click', closeModal);
@@ -490,6 +556,7 @@
       noteList.addEventListener('click', handleNoteClick);
 
       renderNotes();
+      initSupabase().then(() => loadNotes());
     </script>
   </body>
 </html>
