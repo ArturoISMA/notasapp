@@ -1,10 +1,20 @@
-module.exports = async function handler(req, res) {
+const handler = async (req, res) => {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { question, notes } = req.body || {};
+  let body = req.body;
+  if (typeof body === 'string') {
+    try {
+      body = JSON.parse(body);
+    } catch (parseError) {
+      console.error('Failed to parse request body:', parseError);
+      return res.status(400).json({ error: 'Invalid JSON body' });
+    }
+  }
+
+  const { question, notes } = body || {};
 
   if (!question || !Array.isArray(notes)) {
     return res.status(400).json({ error: 'Question and notes are required' });
@@ -74,4 +84,6 @@ module.exports = async function handler(req, res) {
       details: error?.message || String(error)
     });
   }
-}
+};
+
+module.exports = handler;
