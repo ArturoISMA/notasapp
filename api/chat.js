@@ -57,34 +57,35 @@ const callGroq = (endpoint, apiKey, body) => {
   });
 };
 
+const isBufferLike = (value) =>
+  Buffer.isBuffer(value) ||
+  value instanceof Uint8Array ||
+  value instanceof ArrayBuffer;
+
 const parseIncomingBody = async (req) => {
   let body = req.body;
 
-  if (body && typeof body === 'object' && Object.keys(body).length > 0) {
+  if (typeof body === 'string') {
+    return JSON.parse(body);
+  }
+
+  if (isBufferLike(body)) {
+    return JSON.parse(Buffer.from(body).toString('utf8'));
+  }
+
+  if (body && typeof body === 'object' && !Array.isArray(body) && Object.keys(body).length > 0) {
     return body;
   }
 
   if (typeof req.rawBody === 'string' && req.rawBody.trim()) {
-    try {
-      return JSON.parse(req.rawBody);
-    } catch (parseError) {
-      throw parseError;
-    }
+    return JSON.parse(req.rawBody);
   }
 
-  if (typeof body === 'string') {
-    try {
-      return JSON.parse(body);
-    } catch (parseError) {
-      throw parseError;
-    }
+  if (isBufferLike(req.rawBody)) {
+    return JSON.parse(Buffer.from(req.rawBody).toString('utf8'));
   }
 
-  try {
-    return await parseRequestBody(req);
-  } catch (parseError) {
-    throw parseError;
-  }
+  return await parseRequestBody(req);
 };
 
 const handler = async (req, res) => {
