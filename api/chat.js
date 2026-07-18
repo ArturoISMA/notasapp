@@ -22,7 +22,7 @@ export default async function handler(req, res) {
   const prompt = `Eres un asistente que responde preguntas usando solamente la información de las notas proporcionadas.\n\nNotas:\n${noteText}\n\nPregunta: ${question}\n\nRespuesta:`;
 
   try {
-    const response = await fetch('https://api.groq.ai/v1/chat/completions', {
+    const response = await fetch('https://api.groq.ai/v1/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -30,27 +30,37 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: 'groq2',
-        messages: [
-          { role: 'system', content: 'Eres un asistente que responde usando únicamente la información dada.' },
-          { role: 'user', content: prompt }
-        ],
+        prompt,
         max_tokens: 500,
         temperature: 0.2
       })
     });
 
-    if (!response.ok) {
-      const errorBody = await response.text();
-      console.error('Groq error:', response.status, errorBody);
-      return res.status(502).json({ error: 'Error from Groq API', details: errorBody });
+    const responseText = await response.text();
+    let responseData;
+
+    try {
+      responseData = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('Failed to parse Groq response:', parseError, responseText);
+      return res.status(502).json({ error: 'Invalid response from Groq API', details: responseText });
     }
 
-    const responseData = await response.json();
-    const answer = responseData?.choices?.[0]?.message?.content || responseData?.output || 'No se obtuvo respuesta de Groq.';
+    if (!response.ok) {
+      console.error('Groq error:', response.status, responseData);
+      return res.status(502).json({ error: 'Error from Groq API', details: responseData });
+    }
+
+    const answer =
+      responseData?.choices?.[0]?.message?.content ||
+      responseData?.choices?.[0]?.text ||
+      responseData?.output?.[0]?.content ||
+      responseData?.output ||
+      'No se obtuvo respuesta de Groq.';
 
     return res.status(200).json({ answer });
   } catch (error) {
     console.error('Chat API failure:', error);
-    return res.status(500).json({ error: 'Failed to query Groq API' });
+    return res.status(500).json({ error: 'Failed to query Groq API', details: error?.message || String(error) });
   }
 }
