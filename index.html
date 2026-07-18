@@ -118,6 +118,37 @@
         margin-top: 2rem;
       }
 
+      .chat-panel {
+        margin-top: 2rem;
+      }
+
+      .chat-card {
+        background: var(--surface);
+        border-radius: var(--radius);
+        padding: 1.5rem;
+        box-shadow: var(--shadow);
+        border: 1px solid transparent;
+      }
+
+      .chat-card h2 {
+        margin: 0 0 0.75rem;
+        font-size: 1.2rem;
+      }
+
+      .chat-result {
+        margin-top: 1rem;
+        padding: 1rem;
+        border-radius: 20px;
+        background: #f9fafb;
+        color: var(--text);
+        min-height: 120px;
+        white-space: pre-wrap;
+      }
+
+      .chat-loading {
+        opacity: 0.8;
+      }
+
       article.note-card {
         background: var(--surface);
         border-radius: var(--radius);
@@ -290,6 +321,26 @@
 
       <section>
         <div class="cards" id="note-list" aria-label="Lista de notas"></div>
+      </section>
+
+      <section class="chat-panel" aria-labelledby="chat-title">
+        <div class="chat-card">
+          <div>
+            <h2 id="chat-title">Chat con tus notas</h2>
+            <p>Haz una pregunta y usa tus notas guardadas para obtener una respuesta.</p>
+          </div>
+
+          <div class="field">
+            <label for="chat-question">Pregunta</label>
+            <textarea id="chat-question" placeholder="Ej. ¿Qué ideas tenía para el proyecto?" rows="4"></textarea>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" id="chat-submit" class="button">Enviar pregunta</button>
+          </div>
+
+          <div id="chat-result" class="chat-result" aria-live="polite">Escribe una pregunta para obtener una respuesta basada en tus notas.</div>
+        </div>
       </section>
     </main>
 
@@ -550,11 +601,57 @@
         }
       }
 
+      async function sendChat() {
+        const question = chatQuestionInput.value.trim();
+        if (!question) {
+          setStatus('Escribe una pregunta para el chat.');
+          return;
+        }
+
+        const notesForChat = notes.map((note) => ({
+          titulo: note.titulo,
+          categoria: note.categoria || 'General',
+          contenido: note.contenido
+        }));
+
+        chatResult.textContent = 'Consultando Groq...';
+        chatResult.classList.add('chat-loading');
+        chatSubmitButton.disabled = true;
+
+        try {
+          const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ question, notes: notesForChat })
+          });
+
+          const data = await response.json();
+          if (!response.ok) {
+            chatResult.textContent = data.error || 'Error al consultar el chat.';
+          } else {
+            chatResult.textContent = data.answer || 'No se recibió respuesta.';
+          }
+        } catch (error) {
+          console.error('Chat request failed:', error);
+          chatResult.textContent = 'No se pudo conectar con la API de chat.';
+        } finally {
+          chatResult.classList.remove('chat-loading');
+          chatSubmitButton.disabled = false;
+        }
+      }
+
+      const chatQuestionInput = document.getElementById('chat-question');
+      const chatSubmitButton = document.getElementById('chat-submit');
+      const chatResult = document.getElementById('chat-result');
+
       openNoteButton.addEventListener('click', () => openModal());
       closeNoteButton.addEventListener('click', closeModal);
       cancelNoteButton.addEventListener('click', closeModal);
       noteForm.addEventListener('submit', saveNote);
       noteList.addEventListener('click', handleNoteClick);
+      chatSubmitButton.addEventListener('click', sendChat);
 
       renderNotes();
       initSupabase().then(() => loadNotes());
