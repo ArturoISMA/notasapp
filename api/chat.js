@@ -1,3 +1,62 @@
+const https = require('https');
+
+const parseRequestBody = (req) => {
+  return new Promise((resolve, reject) => {
+    let data = '';
+
+    req.on('data', (chunk) => {
+      data += chunk;
+    });
+
+    req.on('end', () => {
+      if (!data) {
+        resolve(undefined);
+        return;
+      }
+
+      try {
+        resolve(JSON.parse(data));
+      } catch (error) {
+        reject(error);
+      }
+    });
+
+    req.on('error', reject);
+  });
+};
+
+const callGroq = (endpoint, apiKey, body) => {
+  return new Promise((resolve, reject) => {
+    const url = new URL(endpoint);
+    const payload = JSON.stringify(body);
+
+    const options = {
+      hostname: url.hostname,
+      path: url.pathname + url.search,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+        Authorization: `Bearer ${apiKey}`
+      }
+    };
+
+    const request = https.request(options, (response) => {
+      let responseData = '';
+      response.on('data', (chunk) => {
+        responseData += chunk;
+      });
+      response.on('end', () => {
+        resolve({ status: response.statusCode, body: responseData });
+      });
+    });
+
+    request.on('error', reject);
+    request.write(payload);
+    request.end();
+  });
+};
+
 const handler = async (req, res) => {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
@@ -5,7 +64,14 @@ const handler = async (req, res) => {
   }
 
   let body = req.body;
-  if (typeof body === 'string') {
+  if (!body) {
+    try {
+      body = await parseRequestBody(req);
+    } catch (parseError) {
+      console.error('Failed to parse request body:', parseError);
+      return res.status(400).json({ error: 'Invalid JSON body' });
+    }
+  } else if (typeof body === 'string') {
     try {
       body = JSON.parse(body);
     } catch (parseError) {
@@ -34,21 +100,14 @@ const handler = async (req, res) => {
   const endpoint = 'https://api.groq.ai/v1/completions';
 
   try {
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'groq2',
-        prompt,
-        max_tokens: 500,
-        temperature: 0.2
-      })
+    const groqResponse = await callGroq(endpoint, apiKey, {
+      model: 'groq2',
+      prompt,
+      max_tokens: 500,
+      temperature: 0.2
     });
 
-    const responseText = await response.text();
+    const responseText = groqResponse.body;
     let responseData;
 
     try {
@@ -61,8 +120,8 @@ const handler = async (req, res) => {
       });
     }
 
-    if (!response.ok) {
-      console.error('Groq error:', response.status, responseData);
+    if (groqResponse.status < 200 || groqResponse.status >= 300) {
+      console.error('Groq error:', groqResponse.status, responseData);
       return res.status(502).json({
         error: 'Error from Groq API',
         details: responseData
