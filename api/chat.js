@@ -57,27 +57,48 @@ const callGroq = (endpoint, apiKey, body) => {
   });
 };
 
+const parseIncomingBody = async (req) => {
+  let body = req.body;
+
+  if (body && typeof body === 'object' && Object.keys(body).length > 0) {
+    return body;
+  }
+
+  if (typeof req.rawBody === 'string' && req.rawBody.trim()) {
+    try {
+      return JSON.parse(req.rawBody);
+    } catch (parseError) {
+      throw parseError;
+    }
+  }
+
+  if (typeof body === 'string') {
+    try {
+      return JSON.parse(body);
+    } catch (parseError) {
+      throw parseError;
+    }
+  }
+
+  try {
+    return await parseRequestBody(req);
+  } catch (parseError) {
+    throw parseError;
+  }
+};
+
 const handler = async (req, res) => {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  let body = req.body;
-  if (!body) {
-    try {
-      body = await parseRequestBody(req);
-    } catch (parseError) {
-      console.error('Failed to parse request body:', parseError);
-      return res.status(400).json({ error: 'Invalid JSON body' });
-    }
-  } else if (typeof body === 'string') {
-    try {
-      body = JSON.parse(body);
-    } catch (parseError) {
-      console.error('Failed to parse request body:', parseError);
-      return res.status(400).json({ error: 'Invalid JSON body' });
-    }
+  let body;
+  try {
+    body = await parseIncomingBody(req);
+  } catch (parseError) {
+    console.error('Failed to parse request body:', parseError);
+    return res.status(400).json({ error: 'Invalid JSON body' });
   }
 
   const { question, notes } = body || {};
