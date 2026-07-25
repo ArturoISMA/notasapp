@@ -89,8 +89,15 @@ const parseIncomingBody = async (req) => {
 };
 
 const handler = async (req, res) => {
+  if (req.method === 'GET') {
+    return res.status(200).json({
+      status: 'ok',
+      message: 'Chat API endpoint is reachable. Use POST with { question, notes } to get a response.'
+    });
+  }
+
   if (req.method !== 'POST') {
-    res.setHeader('Allow', ['POST']);
+    res.setHeader('Allow', ['GET', 'POST']);
     return res.status(405).json({ error: 'Method not allowed' });
   }
 

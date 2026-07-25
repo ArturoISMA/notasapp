@@ -100,6 +100,38 @@
         gap: 1.5rem;
       }
 
+      .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+
+      .user-info {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.55rem 0.85rem;
+        border-radius: 999px;
+        background: var(--brand-soft);
+        color: var(--brand);
+        font-size: 0.95rem;
+      }
+
+      .auth-panel {
+        margin-top: 2rem;
+        display: none;
+        justify-content: center;
+      }
+
+      .auth-card {
+        width: min(540px, 100%);
+        background: var(--surface);
+        border-radius: var(--radius);
+        padding: 2rem;
+        box-shadow: var(--shadow);
+        border: 1px solid rgba(15, 23, 42, 0.08);
+      }
+
       .hero h1 {
         font-size: clamp(2rem, 3vw, 3rem);
         margin: 0;
@@ -308,8 +340,40 @@
 
     <header>
       <div class="brand">Notas<span>App</span></div>
-      <button id="open-note" type="button" class="button" aria-haspopup="dialog">+ Nueva nota</button>
+      <div class="header-actions">
+        <span id="user-info" class="user-info"></span>
+        <button type="button" id="logout-button" class="button secondary" style="display: none;">Cerrar sesión</button>
+        <button id="open-note" type="button" class="button" aria-haspopup="dialog">+ Nueva nota</button>
+      </div>
     </header>
+
+    <section id="auth-panel" class="auth-panel">
+      <div class="auth-card">
+        <h2 id="auth-title">Iniciar sesión</h2>
+        <p>Usa tu correo y contraseña para acceder a tus notas.</p>
+
+        <form id="auth-form">
+          <div class="field">
+            <label for="auth-email">Correo electrónico</label>
+            <input id="auth-email" type="email" placeholder="usuario@ejemplo.com" required />
+          </div>
+
+          <div class="field">
+            <label for="auth-password">Contraseña</label>
+            <input id="auth-password" type="password" placeholder="********" required />
+          </div>
+
+          <div class="modal-footer">
+            <button type="submit" id="auth-action" class="button">Entrar</button>
+          </div>
+        </form>
+
+        <p id="auth-message" style="color: var(--text); margin-top: 1rem;"></p>
+        <p style="margin-top: 1rem; color: var(--muted);">
+          <a href="#" id="auth-toggle">¿No tienes cuenta? Regístrate</a>
+        </p>
+      </div>
+    </section>
 
     <main>
       <section class="hero" aria-labelledby="hero-title">
@@ -409,6 +473,19 @@
       const cancelNoteButton = document.getElementById('cancel-note');
       const saveButton = document.getElementById('save-note');
       const statusMessage = document.getElementById('status-message');
+      const authPanel = document.getElementById('auth-panel');
+      const authForm = document.getElementById('auth-form');
+      const authTitle = document.getElementById('auth-title');
+      const authMessage = document.getElementById('auth-message');
+      const authEmailInput = document.getElementById('auth-email');
+      const authPasswordInput = document.getElementById('auth-password');
+      const authActionButton = document.getElementById('auth-action');
+      const authToggleLink = document.getElementById('auth-toggle');
+      const userInfo = document.getElementById('user-info');
+      const logoutButton = document.getElementById('logout-button');
+      const appMain = document.querySelector('main');
+      const appFooter = document.querySelector('footer');
+      let authMode = 'login';
 
       function setStatus(message) {
         if (statusMessage) {
@@ -652,9 +729,116 @@
       noteForm.addEventListener('submit', saveNote);
       noteList.addEventListener('click', handleNoteClick);
       chatSubmitButton.addEventListener('click', sendChat);
+      authToggleLink.addEventListener('click', (event) => {
+        event.preventDefault();
+        setAuthMode(authMode === 'login' ? 'register' : 'login');
+      });
 
-      renderNotes();
-      initSupabase().then(() => loadNotes());
+      authForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const email = authEmailInput.value.trim();
+        const password = authPasswordInput.value.trim();
+
+        if (!email || !password) {
+          authMessage.textContent = 'Ingresa correo y contraseña.';
+          return;
+        }
+
+        authActionButton.disabled = true;
+        authMessage.textContent = '';
+
+        try {
+          if (authMode === 'login') {
+            const { data, error } = await supabaseClient.auth.signInWithPassword({
+              email,
+              password
+            });
+            if (error) throw error;
+            if (data?.session?.user) {
+              setStatus('Sesión iniciada.');
+            } else {
+              authMessage.textContent = 'Revisa tu correo si tu cuenta aún no está confirmada.';
+            }
+          } else {
+            const { data, error } = await supabaseClient.auth.signUp({
+              email,
+              password
+            });
+            if (error) throw error;
+            authMessage.textContent = 'Cuenta creada. Revisa tu correo para confirmar y luego inicia sesión.';
+            setAuthMode('login');
+            return;
+          }
+        } catch (error) {
+          authMessage.textContent = error?.message || 'Hubo un error al iniciar sesión.';
+          console.error(error);
+        } finally {
+          authActionButton.disabled = false;
+        }
+      });
+
+      logoutButton.addEventListener('click', async () => {
+        await supabaseClient.auth.signOut();
+        setStatus('Sesión cerrada.');
+      });
+
+      supabaseClient.auth.onAuthStateChange(async (_event, session) => {
+        const user = session?.user || null;
+        if (user) {
+          setUserInfo(user);
+          showApp();
+          await loadNotes();
+        } else {
+          setUserInfo(null);
+          showAuth();
+        }
+      });
+
+      async function checkAuth() {
+        const { data, error } = await supabaseClient.auth.getSession();
+        const user = data?.session?.user || null;
+        if (error) {
+          console.error('Auth session error:', error);
+        }
+        if (user) {
+          setUserInfo(user);
+          showApp();
+          loadNotes();
+        } else {
+          showAuth();
+        }
+      }
+
+      function setAuthMode(mode) {
+        authMode = mode;
+        authTitle.textContent = mode === 'login' ? 'Iniciar sesión' : 'Crear cuenta';
+        authActionButton.textContent = mode === 'login' ? 'Entrar' : 'Registrarse';
+        authToggleLink.textContent = mode === 'login' ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia sesión';
+        authMessage.textContent = '';
+      }
+
+      function showApp() {
+        authPanel.style.display = 'none';
+        appMain.style.display = 'block';
+        appFooter.style.display = 'block';
+        openNoteButton.style.display = 'inline-flex';
+        logoutButton.style.display = 'inline-flex';
+      }
+
+      function showAuth() {
+        authPanel.style.display = 'flex';
+        appMain.style.display = 'none';
+        appFooter.style.display = 'none';
+        openNoteButton.style.display = 'none';
+        logoutButton.style.display = 'none';
+        setAuthMode('login');
+      }
+
+      function setUserInfo(user) {
+        userInfo.textContent = user ? `Hola, ${user.email}` : '';
+      }
+
+      checkAuth();
     </script>
   </body>
 </html>
